@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+-include /usr/share/gnome-pkg-tools/1/rules/gnome-get-source.mk
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,-O1 -Wl,--as-needed
+
+%:
+	dh $@ --with gnome
+
+override_dh_autoreconf:
+	dh_autoreconf --as-needed
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--disable-gtk-doc \
+		--with-systemdsystemunitdir=/lib/systemd/system \
+		--with-udevrulesdir=/lib/udev
+
+override_dh_install:
+	dh_install --fail-missing

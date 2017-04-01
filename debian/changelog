@@ -1,0 +1,5 @@
+switcheroo-control (1.1-1) UNRELEASED; urgency=medium
+
+  * Initial release (Closes: #857503) (LP: #1671828)
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Tue, 07 Mar 2017 08:52:34 -0500
