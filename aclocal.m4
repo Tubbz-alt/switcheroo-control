@@ -1,6 +1,6 @@
-# generated automatically by aclocal 1.15 -*- Autoconf -*-
+# generated automatically by aclocal 1.15.1 -*- Autoconf -*-
 
-# Copyright (C) 1996-2014 Free Software Foundation, Inc.
+# Copyright (C) 1996-2017 Free Software Foundation, Inc.
 
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -20,194 +20,98 @@ You have another version of autoconf.  It may work, but is not guaranteed to.
 If you have problems, you may need to regenerate the build system entirely.
 To do so, use the procedure documented by the package, typically 'autoreconf'.])])
 
-# gnome-compiler-flags.m4
-#
-# serial 4
-#
+dnl -*- mode: autoconf -*-
 
-dnl GNOME_COMPILE_WARNINGS
-dnl Turn on many useful compiler warnings and substitute the result into
-dnl WARN_CFLAGS
-dnl For now, only works on GCC
-dnl Pass the default value of the --enable-compile-warnings configure option as
-dnl the first argument to the macro, defaulting to 'yes'.
-dnl Additional warning/error flags can be passed as an optional second argument.
-dnl
-dnl For example: GNOME_COMPILE_WARNINGS([maximum],[-Werror=some-flag -Wfoobar])
-AU_DEFUN([GNOME_COMPILE_WARNINGS],[
-    dnl ******************************
-    dnl More compiler warnings
-    dnl ******************************
+# serial 2
 
-    AC_ARG_ENABLE(compile-warnings, 
-                  AS_HELP_STRING([--enable-compile-warnings=@<:@no/minimum/yes/maximum/error@:>@],
-                                 [Turn on compiler warnings]),,
-                  [enable_compile_warnings="m4_default([$1],[yes])"])
+dnl Usage:
+dnl   GTK_DOC_CHECK([minimum-gtk-doc-version])
+AC_DEFUN([GTK_DOC_CHECK],
+[
+  AC_REQUIRE([PKG_PROG_PKG_CONFIG])
+  AC_BEFORE([AC_PROG_LIBTOOL],[$0])dnl setup libtool first
+  AC_BEFORE([AM_PROG_LIBTOOL],[$0])dnl setup libtool first
 
-    if test "x$GCC" != xyes; then
-	enable_compile_warnings=no
-    fi
+  ifelse([$1],[],[gtk_doc_requires="gtk-doc"],[gtk_doc_requires="gtk-doc >= $1"])
+  AC_MSG_CHECKING([for gtk-doc])
+  PKG_CHECK_EXISTS([$gtk_doc_requires],[have_gtk_doc=yes],[have_gtk_doc=no])
+  AC_MSG_RESULT($have_gtk_doc)
 
-    warning_flags=
-    realsave_CFLAGS="$CFLAGS"
-
-    dnl These are warning flags that aren't marked as fatal.  Can be
-    dnl overridden on a per-project basis with -Wno-foo.
-    base_warn_flags=" \
-        -Wall \
-        -Wstrict-prototypes \
-        -Wnested-externs \
-    "
-
-    dnl These compiler flags typically indicate very broken or suspicious
-    dnl code.  Some of them such as implicit-function-declaration are
-    dnl just not default because gcc compiles a lot of legacy code.
-    dnl We choose to make this set into explicit errors.
-    base_error_flags=" \
-        -Werror=missing-prototypes \
-        -Werror=implicit-function-declaration \
-        -Werror=pointer-arith \
-        -Werror=init-self \
-        -Werror=format-security \
-        -Werror=format=2 \
-        -Werror=missing-include-dirs \
-        -Werror=return-type \
-    "
-
-    dnl Additional warning or error flags provided by the module author to
-    dnl allow stricter standards to be imposed on a per-module basis.
-    dnl The author can pass -W or -Werror flags here as they see fit.
-    additional_flags="m4_default([$2],[])"
-
-    case "$enable_compile_warnings" in
-    no)
-        warning_flags="-w"
-        ;;
-    minimum)
-        warning_flags="-Wall"
-        ;;
-    yes|maximum|error)
-        warning_flags="$base_warn_flags $base_error_flags $additional_flags"
-        ;;
-    *)
-        AC_MSG_ERROR(Unknown argument '$enable_compile_warnings' to --enable-compile-warnings)
-        ;;
-    esac
-
-    if test "$enable_compile_warnings" = "error" ; then
-        warning_flags="$warning_flags -Werror"
-    fi
-
-    dnl Check whether GCC supports the warning options
-    for option in $warning_flags; do
-	save_CFLAGS="$CFLAGS"
-	CFLAGS="$CFLAGS $option"
-	AC_MSG_CHECKING([whether gcc understands $option])
-	AC_TRY_COMPILE([], [],
-	    has_option=yes,
-	    has_option=no,)
-	CFLAGS="$save_CFLAGS"
-	AC_MSG_RESULT([$has_option])
-	if test $has_option = yes; then
-	    tested_warning_flags="$tested_warning_flags $option"
-	fi
-	unset has_option
-	unset save_CFLAGS
-    done
-    unset option
-    CFLAGS="$realsave_CFLAGS"
-    AC_MSG_CHECKING(what warning flags to pass to the C compiler)
-    AC_MSG_RESULT($tested_warning_flags)
-
-    AC_ARG_ENABLE(iso-c,
-                  AS_HELP_STRING([--enable-iso-c],
-                                 [Try to warn if code is not ISO C ]),,
-                  [enable_iso_c=no])
-
-    AC_MSG_CHECKING(what language compliance flags to pass to the C compiler)
-    complCFLAGS=
-    if test "x$enable_iso_c" != "xno"; then
-	if test "x$GCC" = "xyes"; then
-	case " $CFLAGS " in
-	    *[\ \	]-ansi[\ \	]*) ;;
-	    *) complCFLAGS="$complCFLAGS -ansi" ;;
-	esac
-	case " $CFLAGS " in
-	    *[\ \	]-pedantic[\ \	]*) ;;
-	    *) complCFLAGS="$complCFLAGS -pedantic" ;;
-	esac
-	fi
-    fi
-    AC_MSG_RESULT($complCFLAGS)
-
-    WARN_CFLAGS="$tested_warning_flags $complCFLAGS"
-    AC_SUBST(WARN_CFLAGS)
-],
-[[$0: This macro is deprecated. You should use AX_COMPILER_FLAGS instead and
-eliminate use of --enable-iso-c.
-See: http://www.gnu.org/software/autoconf-archive/ax_compiler_flags.html#ax_compiler_flags]])
-
-dnl For C++, do basically the same thing.
-
-AU_DEFUN([GNOME_CXX_WARNINGS],[
-  AC_ARG_ENABLE(cxx-warnings,
-                AS_HELP_STRING([--enable-cxx-warnings=@<:@no/minimum/yes@:>@]
-                               [Turn on compiler warnings.]),,
-                [enable_cxx_warnings="m4_default([$1],[minimum])"])
-
-  AC_MSG_CHECKING(what warning flags to pass to the C++ compiler)
-  warnCXXFLAGS=
-  if test "x$GXX" != xyes; then
-    enable_cxx_warnings=no
+  if test "$have_gtk_doc" = "no"; then
+      AC_MSG_WARN([
+  You will not be able to create source packages with 'make dist'
+  because $gtk_doc_requires is not found.])
   fi
-  if test "x$enable_cxx_warnings" != "xno"; then
-    if test "x$GXX" = "xyes"; then
-      case " $CXXFLAGS " in
-      *[\ \	]-Wall[\ \	]*) ;;
-      *) warnCXXFLAGS="-Wall -Wno-unused" ;;
-      esac
 
-      ## -W is not all that useful.  And it cannot be controlled
-      ## with individual -Wno-xxx flags, unlike -Wall
-      if test "x$enable_cxx_warnings" = "xyes"; then
-	warnCXXFLAGS="$warnCXXFLAGS -Wshadow -Woverloaded-virtual"
-      fi
-    fi
+  dnl check for tools we added during development
+  dnl Use AC_CHECK_PROG to avoid the check target using an absolute path that
+  dnl may not be writable by the user. Currently, automake requires that the
+  dnl test name must end in '.test'.
+  dnl https://bugzilla.gnome.org/show_bug.cgi?id=701638
+  AC_CHECK_PROG([GTKDOC_CHECK],[gtkdoc-check],[gtkdoc-check.test])
+  AC_PATH_PROG([GTKDOC_CHECK_PATH],[gtkdoc-check])
+  AC_PATH_PROGS([GTKDOC_REBASE],[gtkdoc-rebase],[true])
+  AC_PATH_PROG([GTKDOC_MKPDF],[gtkdoc-mkpdf])
+
+  dnl for overriding the documentation installation directory
+  AC_ARG_WITH([html-dir],
+    AS_HELP_STRING([--with-html-dir=PATH], [path to installed docs]),,
+    [with_html_dir='${datadir}/gtk-doc/html'])
+  HTML_DIR="$with_html_dir"
+  AC_SUBST([HTML_DIR])
+
+  dnl enable/disable documentation building
+  AC_ARG_ENABLE([gtk-doc],
+    AS_HELP_STRING([--enable-gtk-doc],
+                   [use gtk-doc to build documentation [[default=no]]]),,
+    [enable_gtk_doc=no])
+
+  AC_MSG_CHECKING([whether to build gtk-doc documentation])
+  AC_MSG_RESULT($enable_gtk_doc)
+
+  if test "x$enable_gtk_doc" = "xyes" && test "$have_gtk_doc" = "no"; then
+    AC_MSG_ERROR([
+  You must have $gtk_doc_requires installed to build documentation for
+  $PACKAGE_NAME. Please install gtk-doc or disable building the
+  documentation by adding '--disable-gtk-doc' to '[$]0'.])
   fi
-  AC_MSG_RESULT($warnCXXFLAGS)
 
-   AC_ARG_ENABLE(iso-cxx,
-                 AS_HELP_STRING([--enable-iso-cxx],
-                                [Try to warn if code is not ISO C++ ]),,
-                 [enable_iso_cxx=no])
+  dnl don't check for glib if we build glib
+  if test "x$PACKAGE_NAME" != "xglib"; then
+    dnl don't fail if someone does not have glib
+    PKG_CHECK_MODULES(GTKDOC_DEPS, glib-2.0 >= 2.10.0 gobject-2.0  >= 2.10.0,,[:])
+  fi
 
-   AC_MSG_CHECKING(what language compliance flags to pass to the C++ compiler)
-   complCXXFLAGS=
-   if test "x$enable_iso_cxx" != "xno"; then
-     if test "x$GXX" = "xyes"; then
-      case " $CXXFLAGS " in
-      *[\ \	]-ansi[\ \	]*) ;;
-      *) complCXXFLAGS="$complCXXFLAGS -ansi" ;;
-      esac
+  dnl enable/disable output formats
+  AC_ARG_ENABLE([gtk-doc-html],
+    AS_HELP_STRING([--enable-gtk-doc-html],
+                   [build documentation in html format [[default=yes]]]),,
+    [enable_gtk_doc_html=yes])
+    AC_ARG_ENABLE([gtk-doc-pdf],
+      AS_HELP_STRING([--enable-gtk-doc-pdf],
+                     [build documentation in pdf format [[default=no]]]),,
+      [enable_gtk_doc_pdf=no])
 
-      case " $CXXFLAGS " in
-      *[\ \	]-pedantic[\ \	]*) ;;
-      *) complCXXFLAGS="$complCXXFLAGS -pedantic" ;;
-      esac
-     fi
-   fi
-  AC_MSG_RESULT($complCXXFLAGS)
+  if test -z "$GTKDOC_MKPDF"; then
+    enable_gtk_doc_pdf=no
+  fi
 
-  WARN_CXXFLAGS="$CXXFLAGS $warnCXXFLAGS $complCXXFLAGS"
-  AC_SUBST(WARN_CXXFLAGS)
-],
-[[$0: This macro is deprecated. You should use AX_COMPILER_FLAGS instead and
-eliminate use of --enable-iso-cxx.
-See: http://www.gnu.org/software/autoconf-archive/ax_compiler_flags.html#ax_compiler_flags]])
+  if test -z "$AM_DEFAULT_VERBOSITY"; then
+    AM_DEFAULT_VERBOSITY=1
+  fi
+  AC_SUBST([AM_DEFAULT_VERBOSITY])
 
-dnl pkg.m4 - Macros to locate and utilise pkg-config.   -*- Autoconf -*-
-dnl serial 11 (pkg-config-0.29.1)
-dnl
+  AM_CONDITIONAL([HAVE_GTK_DOC], [test x$have_gtk_doc = xyes])
+  AM_CONDITIONAL([ENABLE_GTK_DOC], [test x$enable_gtk_doc = xyes])
+  AM_CONDITIONAL([GTK_DOC_BUILD_HTML], [test x$enable_gtk_doc_html = xyes])
+  AM_CONDITIONAL([GTK_DOC_BUILD_PDF], [test x$enable_gtk_doc_pdf = xyes])
+  AM_CONDITIONAL([GTK_DOC_USE_LIBTOOL], [test -n "$LIBTOOL"])
+  AM_CONDITIONAL([GTK_DOC_USE_REBASE], [test -n "$GTKDOC_REBASE"])
+])
+
+# pkg.m4 - Macros to locate and utilise pkg-config.   -*- Autoconf -*-
+# serial 11 (pkg-config-0.29.1)
+
 dnl Copyright © 2004 Scott James Remnant <scott@netsplit.com>.
 dnl Copyright © 2012-2015 Dan Nicholson <dbn.lists@gmail.com>
 dnl
@@ -481,96 +385,260 @@ AS_VAR_COPY([$1], [pkg_cv_][$1])
 AS_VAR_IF([$1], [""], [$5], [$4])dnl
 ])dnl PKG_CHECK_VAR
 
-dnl -*- mode: autoconf -*-
-
-# serial 2
-
-dnl Usage:
-dnl   GTK_DOC_CHECK([minimum-gtk-doc-version])
-AC_DEFUN([GTK_DOC_CHECK],
+dnl PKG_WITH_MODULES(VARIABLE-PREFIX, MODULES,
+dnl   [ACTION-IF-FOUND],[ACTION-IF-NOT-FOUND],
+dnl   [DESCRIPTION], [DEFAULT])
+dnl ------------------------------------------
+dnl
+dnl Prepare a "--with-" configure option using the lowercase
+dnl [VARIABLE-PREFIX] name, merging the behaviour of AC_ARG_WITH and
+dnl PKG_CHECK_MODULES in a single macro.
+AC_DEFUN([PKG_WITH_MODULES],
 [
-  AC_REQUIRE([PKG_PROG_PKG_CONFIG])
-  AC_BEFORE([AC_PROG_LIBTOOL],[$0])dnl setup libtool first
-  AC_BEFORE([AM_PROG_LIBTOOL],[$0])dnl setup libtool first
+m4_pushdef([with_arg], m4_tolower([$1]))
 
-  ifelse([$1],[],[gtk_doc_requires="gtk-doc"],[gtk_doc_requires="gtk-doc >= $1"])
-  AC_MSG_CHECKING([for gtk-doc])
-  PKG_CHECK_EXISTS([$gtk_doc_requires],[have_gtk_doc=yes],[have_gtk_doc=no])
-  AC_MSG_RESULT($have_gtk_doc)
+m4_pushdef([description],
+           [m4_default([$5], [build with ]with_arg[ support])])
 
-  if test "$have_gtk_doc" = "no"; then
-      AC_MSG_WARN([
-  You will not be able to create source packages with 'make dist'
-  because $gtk_doc_requires is not found.])
+m4_pushdef([def_arg], [m4_default([$6], [auto])])
+m4_pushdef([def_action_if_found], [AS_TR_SH([with_]with_arg)=yes])
+m4_pushdef([def_action_if_not_found], [AS_TR_SH([with_]with_arg)=no])
+
+m4_case(def_arg,
+            [yes],[m4_pushdef([with_without], [--without-]with_arg)],
+            [m4_pushdef([with_without],[--with-]with_arg)])
+
+AC_ARG_WITH(with_arg,
+     AS_HELP_STRING(with_without, description[ @<:@default=]def_arg[@:>@]),,
+    [AS_TR_SH([with_]with_arg)=def_arg])
+
+AS_CASE([$AS_TR_SH([with_]with_arg)],
+            [yes],[PKG_CHECK_MODULES([$1],[$2],$3,$4)],
+            [auto],[PKG_CHECK_MODULES([$1],[$2],
+                                        [m4_n([def_action_if_found]) $3],
+                                        [m4_n([def_action_if_not_found]) $4])])
+
+m4_popdef([with_arg])
+m4_popdef([description])
+m4_popdef([def_arg])
+
+])dnl PKG_WITH_MODULES
+
+dnl PKG_HAVE_WITH_MODULES(VARIABLE-PREFIX, MODULES,
+dnl   [DESCRIPTION], [DEFAULT])
+dnl -----------------------------------------------
+dnl
+dnl Convenience macro to trigger AM_CONDITIONAL after PKG_WITH_MODULES
+dnl check._[VARIABLE-PREFIX] is exported as make variable.
+AC_DEFUN([PKG_HAVE_WITH_MODULES],
+[
+PKG_WITH_MODULES([$1],[$2],,,[$3],[$4])
+
+AM_CONDITIONAL([HAVE_][$1],
+               [test "$AS_TR_SH([with_]m4_tolower([$1]))" = "yes"])
+])dnl PKG_HAVE_WITH_MODULES
+
+dnl PKG_HAVE_DEFINE_WITH_MODULES(VARIABLE-PREFIX, MODULES,
+dnl   [DESCRIPTION], [DEFAULT])
+dnl ------------------------------------------------------
+dnl
+dnl Convenience macro to run AM_CONDITIONAL and AC_DEFINE after
+dnl PKG_WITH_MODULES check. HAVE_[VARIABLE-PREFIX] is exported as make
+dnl and preprocessor variable.
+AC_DEFUN([PKG_HAVE_DEFINE_WITH_MODULES],
+[
+PKG_HAVE_WITH_MODULES([$1],[$2],[$3],[$4])
+
+AS_IF([test "$AS_TR_SH([with_]m4_tolower([$1]))" = "yes"],
+        [AC_DEFINE([HAVE_][$1], 1, [Enable ]m4_tolower([$1])[ support])])
+])dnl PKG_HAVE_DEFINE_WITH_MODULES
+
+# gnome-compiler-flags.m4
+#
+# serial 4
+#
+
+dnl GNOME_COMPILE_WARNINGS
+dnl Turn on many useful compiler warnings and substitute the result into
+dnl WARN_CFLAGS
+dnl For now, only works on GCC
+dnl Pass the default value of the --enable-compile-warnings configure option as
+dnl the first argument to the macro, defaulting to 'yes'.
+dnl Additional warning/error flags can be passed as an optional second argument.
+dnl
+dnl For example: GNOME_COMPILE_WARNINGS([maximum],[-Werror=some-flag -Wfoobar])
+AU_DEFUN([GNOME_COMPILE_WARNINGS],[
+    dnl ******************************
+    dnl More compiler warnings
+    dnl ******************************
+
+    AC_ARG_ENABLE(compile-warnings, 
+                  AS_HELP_STRING([--enable-compile-warnings=@<:@no/minimum/yes/maximum/error@:>@],
+                                 [Turn on compiler warnings]),,
+                  [enable_compile_warnings="m4_default([$1],[yes])"])
+
+    if test "x$GCC" != xyes; then
+	enable_compile_warnings=no
+    fi
+
+    warning_flags=
+    realsave_CFLAGS="$CFLAGS"
+
+    dnl These are warning flags that aren't marked as fatal.  Can be
+    dnl overridden on a per-project basis with -Wno-foo.
+    base_warn_flags=" \
+        -Wall \
+        -Wstrict-prototypes \
+        -Wnested-externs \
+    "
+
+    dnl These compiler flags typically indicate very broken or suspicious
+    dnl code.  Some of them such as implicit-function-declaration are
+    dnl just not default because gcc compiles a lot of legacy code.
+    dnl We choose to make this set into explicit errors.
+    base_error_flags=" \
+        -Werror=missing-prototypes \
+        -Werror=implicit-function-declaration \
+        -Werror=pointer-arith \
+        -Werror=init-self \
+        -Werror=format-security \
+        -Werror=format=2 \
+        -Werror=missing-include-dirs \
+        -Werror=return-type \
+    "
+
+    dnl Additional warning or error flags provided by the module author to
+    dnl allow stricter standards to be imposed on a per-module basis.
+    dnl The author can pass -W or -Werror flags here as they see fit.
+    additional_flags="m4_default([$2],[])"
+
+    case "$enable_compile_warnings" in
+    no)
+        warning_flags="-w"
+        ;;
+    minimum)
+        warning_flags="-Wall"
+        ;;
+    yes|maximum|error)
+        warning_flags="$base_warn_flags $base_error_flags $additional_flags"
+        ;;
+    *)
+        AC_MSG_ERROR(Unknown argument '$enable_compile_warnings' to --enable-compile-warnings)
+        ;;
+    esac
+
+    if test "$enable_compile_warnings" = "error" ; then
+        warning_flags="$warning_flags -Werror"
+    fi
+
+    dnl Check whether GCC supports the warning options
+    for option in $warning_flags; do
+	save_CFLAGS="$CFLAGS"
+	CFLAGS="$CFLAGS $option"
+	AC_MSG_CHECKING([whether gcc understands $option])
+	AC_TRY_COMPILE([], [],
+	    has_option=yes,
+	    has_option=no,)
+	CFLAGS="$save_CFLAGS"
+	AC_MSG_RESULT([$has_option])
+	if test $has_option = yes; then
+	    tested_warning_flags="$tested_warning_flags $option"
+	fi
+	unset has_option
+	unset save_CFLAGS
+    done
+    unset option
+    CFLAGS="$realsave_CFLAGS"
+    AC_MSG_CHECKING(what warning flags to pass to the C compiler)
+    AC_MSG_RESULT($tested_warning_flags)
+
+    AC_ARG_ENABLE(iso-c,
+                  AS_HELP_STRING([--enable-iso-c],
+                                 [Try to warn if code is not ISO C ]),,
+                  [enable_iso_c=no])
+
+    AC_MSG_CHECKING(what language compliance flags to pass to the C compiler)
+    complCFLAGS=
+    if test "x$enable_iso_c" != "xno"; then
+	if test "x$GCC" = "xyes"; then
+	case " $CFLAGS " in
+	    *[\ \	]-ansi[\ \	]*) ;;
+	    *) complCFLAGS="$complCFLAGS -ansi" ;;
+	esac
+	case " $CFLAGS " in
+	    *[\ \	]-pedantic[\ \	]*) ;;
+	    *) complCFLAGS="$complCFLAGS -pedantic" ;;
+	esac
+	fi
+    fi
+    AC_MSG_RESULT($complCFLAGS)
+
+    WARN_CFLAGS="$tested_warning_flags $complCFLAGS"
+    AC_SUBST(WARN_CFLAGS)
+],
+[[$0: This macro is deprecated. You should use AX_COMPILER_FLAGS instead and
+eliminate use of --enable-iso-c.
+See: http://www.gnu.org/software/autoconf-archive/ax_compiler_flags.html#ax_compiler_flags]])
+
+dnl For C++, do basically the same thing.
+
+AU_DEFUN([GNOME_CXX_WARNINGS],[
+  AC_ARG_ENABLE(cxx-warnings,
+                AS_HELP_STRING([--enable-cxx-warnings=@<:@no/minimum/yes@:>@]
+                               [Turn on compiler warnings.]),,
+                [enable_cxx_warnings="m4_default([$1],[minimum])"])
+
+  AC_MSG_CHECKING(what warning flags to pass to the C++ compiler)
+  warnCXXFLAGS=
+  if test "x$GXX" != xyes; then
+    enable_cxx_warnings=no
   fi
+  if test "x$enable_cxx_warnings" != "xno"; then
+    if test "x$GXX" = "xyes"; then
+      case " $CXXFLAGS " in
+      *[\ \	]-Wall[\ \	]*) ;;
+      *) warnCXXFLAGS="-Wall -Wno-unused" ;;
+      esac
 
-  dnl check for tools we added during development
-  dnl Use AC_CHECK_PROG to avoid the check target using an absolute path that
-  dnl may not be writable by the user. Currently, automake requires that the
-  dnl test name must end in '.test'.
-  dnl https://bugzilla.gnome.org/show_bug.cgi?id=701638
-  AC_CHECK_PROG([GTKDOC_CHECK],[gtkdoc-check],[gtkdoc-check.test])
-  AC_PATH_PROG([GTKDOC_CHECK_PATH],[gtkdoc-check])
-  AC_PATH_PROGS([GTKDOC_REBASE],[gtkdoc-rebase],[true])
-  AC_PATH_PROG([GTKDOC_MKPDF],[gtkdoc-mkpdf])
-
-  dnl for overriding the documentation installation directory
-  AC_ARG_WITH([html-dir],
-    AS_HELP_STRING([--with-html-dir=PATH], [path to installed docs]),,
-    [with_html_dir='${datadir}/gtk-doc/html'])
-  HTML_DIR="$with_html_dir"
-  AC_SUBST([HTML_DIR])
-
-  dnl enable/disable documentation building
-  AC_ARG_ENABLE([gtk-doc],
-    AS_HELP_STRING([--enable-gtk-doc],
-                   [use gtk-doc to build documentation [[default=no]]]),,
-    [enable_gtk_doc=no])
-
-  AC_MSG_CHECKING([whether to build gtk-doc documentation])
-  AC_MSG_RESULT($enable_gtk_doc)
-
-  if test "x$enable_gtk_doc" = "xyes" && test "$have_gtk_doc" = "no"; then
-    AC_MSG_ERROR([
-  You must have $gtk_doc_requires installed to build documentation for
-  $PACKAGE_NAME. Please install gtk-doc or disable building the
-  documentation by adding '--disable-gtk-doc' to '[$]0'.])
+      ## -W is not all that useful.  And it cannot be controlled
+      ## with individual -Wno-xxx flags, unlike -Wall
+      if test "x$enable_cxx_warnings" = "xyes"; then
+	warnCXXFLAGS="$warnCXXFLAGS -Wshadow -Woverloaded-virtual"
+      fi
+    fi
   fi
+  AC_MSG_RESULT($warnCXXFLAGS)
 
-  dnl don't check for glib if we build glib
-  if test "x$PACKAGE_NAME" != "xglib"; then
-    dnl don't fail if someone does not have glib
-    PKG_CHECK_MODULES(GTKDOC_DEPS, glib-2.0 >= 2.10.0 gobject-2.0  >= 2.10.0,,[:])
-  fi
+   AC_ARG_ENABLE(iso-cxx,
+                 AS_HELP_STRING([--enable-iso-cxx],
+                                [Try to warn if code is not ISO C++ ]),,
+                 [enable_iso_cxx=no])
 
-  dnl enable/disable output formats
-  AC_ARG_ENABLE([gtk-doc-html],
-    AS_HELP_STRING([--enable-gtk-doc-html],
-                   [build documentation in html format [[default=yes]]]),,
-    [enable_gtk_doc_html=yes])
-    AC_ARG_ENABLE([gtk-doc-pdf],
-      AS_HELP_STRING([--enable-gtk-doc-pdf],
-                     [build documentation in pdf format [[default=no]]]),,
-      [enable_gtk_doc_pdf=no])
+   AC_MSG_CHECKING(what language compliance flags to pass to the C++ compiler)
+   complCXXFLAGS=
+   if test "x$enable_iso_cxx" != "xno"; then
+     if test "x$GXX" = "xyes"; then
+      case " $CXXFLAGS " in
+      *[\ \	]-ansi[\ \	]*) ;;
+      *) complCXXFLAGS="$complCXXFLAGS -ansi" ;;
+      esac
 
-  if test -z "$GTKDOC_MKPDF"; then
-    enable_gtk_doc_pdf=no
-  fi
+      case " $CXXFLAGS " in
+      *[\ \	]-pedantic[\ \	]*) ;;
+      *) complCXXFLAGS="$complCXXFLAGS -pedantic" ;;
+      esac
+     fi
+   fi
+  AC_MSG_RESULT($complCXXFLAGS)
 
-  if test -z "$AM_DEFAULT_VERBOSITY"; then
-    AM_DEFAULT_VERBOSITY=1
-  fi
-  AC_SUBST([AM_DEFAULT_VERBOSITY])
+  WARN_CXXFLAGS="$CXXFLAGS $warnCXXFLAGS $complCXXFLAGS"
+  AC_SUBST(WARN_CXXFLAGS)
+],
+[[$0: This macro is deprecated. You should use AX_COMPILER_FLAGS instead and
+eliminate use of --enable-iso-cxx.
+See: http://www.gnu.org/software/autoconf-archive/ax_compiler_flags.html#ax_compiler_flags]])
 
-  AM_CONDITIONAL([HAVE_GTK_DOC], [test x$have_gtk_doc = xyes])
-  AM_CONDITIONAL([ENABLE_GTK_DOC], [test x$enable_gtk_doc = xyes])
-  AM_CONDITIONAL([GTK_DOC_BUILD_HTML], [test x$enable_gtk_doc_html = xyes])
-  AM_CONDITIONAL([GTK_DOC_BUILD_PDF], [test x$enable_gtk_doc_pdf = xyes])
-  AM_CONDITIONAL([GTK_DOC_USE_LIBTOOL], [test -n "$LIBTOOL"])
-  AM_CONDITIONAL([GTK_DOC_USE_REBASE], [test -n "$GTKDOC_REBASE"])
-])
-
-# Copyright (C) 2002-2014 Free Software Foundation, Inc.
+# Copyright (C) 2002-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -585,7 +653,7 @@ AC_DEFUN([AM_AUTOMAKE_VERSION],
 [am__api_version='1.15'
 dnl Some users find AM_AUTOMAKE_VERSION and mistake it for a way to
 dnl require some minimum version.  Point them to the right macro.
-m4_if([$1], [1.15], [],
+m4_if([$1], [1.15.1], [],
       [AC_FATAL([Do not call $0, use AM_INIT_AUTOMAKE([$1]).])])dnl
 ])
 
@@ -601,14 +669,14 @@ m4_define([_AM_AUTOCONF_VERSION], [])
 # Call AM_AUTOMAKE_VERSION and AM_AUTOMAKE_VERSION so they can be traced.
 # This function is AC_REQUIREd by AM_INIT_AUTOMAKE.
 AC_DEFUN([AM_SET_CURRENT_AUTOMAKE_VERSION],
-[AM_AUTOMAKE_VERSION([1.15])dnl
+[AM_AUTOMAKE_VERSION([1.15.1])dnl
 m4_ifndef([AC_AUTOCONF_VERSION],
   [m4_copy([m4_PACKAGE_VERSION], [AC_AUTOCONF_VERSION])])dnl
 _AM_AUTOCONF_VERSION(m4_defn([AC_AUTOCONF_VERSION]))])
 
 # AM_AUX_DIR_EXPAND                                         -*- Autoconf -*-
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -660,7 +728,7 @@ am_aux_dir=`cd "$ac_aux_dir" && pwd`
 
 # AM_CONDITIONAL                                            -*- Autoconf -*-
 
-# Copyright (C) 1997-2014 Free Software Foundation, Inc.
+# Copyright (C) 1997-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -691,7 +759,7 @@ AC_CONFIG_COMMANDS_PRE(
 Usually this means the macro was only invoked conditionally.]])
 fi])])
 
-# Copyright (C) 1999-2014 Free Software Foundation, Inc.
+# Copyright (C) 1999-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -882,7 +950,7 @@ _AM_SUBST_NOTMAKE([am__nodep])dnl
 
 # Generate code to set up dependency tracking.              -*- Autoconf -*-
 
-# Copyright (C) 1999-2014 Free Software Foundation, Inc.
+# Copyright (C) 1999-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -958,7 +1026,7 @@ AC_DEFUN([AM_OUTPUT_DEPENDENCY_COMMANDS],
 
 # Do all the work for Automake.                             -*- Autoconf -*-
 
-# Copyright (C) 1996-2014 Free Software Foundation, Inc.
+# Copyright (C) 1996-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1155,7 +1223,7 @@ for _am_header in $config_headers :; do
 done
 echo "timestamp for $_am_arg" >`AS_DIRNAME(["$_am_arg"])`/stamp-h[]$_am_stamp_count])
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1176,7 +1244,7 @@ if test x"${install_sh+set}" != xset; then
 fi
 AC_SUBST([install_sh])])
 
-# Copyright (C) 2003-2014 Free Software Foundation, Inc.
+# Copyright (C) 2003-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1197,7 +1265,7 @@ AC_SUBST([am__leading_dot])])
 
 # Check to see how 'make' treats includes.	            -*- Autoconf -*-
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1247,7 +1315,7 @@ rm -f confinc confmf
 
 # Fake the existence of programs that GNU maintainers use.  -*- Autoconf -*-
 
-# Copyright (C) 1997-2014 Free Software Foundation, Inc.
+# Copyright (C) 1997-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1286,7 +1354,7 @@ fi
 
 # Helper functions for option handling.                     -*- Autoconf -*-
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1315,7 +1383,7 @@ AC_DEFUN([_AM_SET_OPTIONS],
 AC_DEFUN([_AM_IF_OPTION],
 [m4_ifset(_AM_MANGLE_OPTION([$1]), [$2], [$3])])
 
-# Copyright (C) 1999-2014 Free Software Foundation, Inc.
+# Copyright (C) 1999-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1362,7 +1430,7 @@ AC_LANG_POP([C])])
 # For backward compatibility.
 AC_DEFUN_ONCE([AM_PROG_CC_C_O], [AC_REQUIRE([AC_PROG_CC])])
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1381,7 +1449,7 @@ AC_DEFUN([AM_RUN_LOG],
 
 # Check to make sure that the build environment is sane.    -*- Autoconf -*-
 
-# Copyright (C) 1996-2014 Free Software Foundation, Inc.
+# Copyright (C) 1996-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1462,7 +1530,7 @@ AC_CONFIG_COMMANDS_PRE(
 rm -f conftest.file
 ])
 
-# Copyright (C) 2009-2014 Free Software Foundation, Inc.
+# Copyright (C) 2009-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1522,7 +1590,7 @@ AC_SUBST([AM_BACKSLASH])dnl
 _AM_SUBST_NOTMAKE([AM_BACKSLASH])dnl
 ])
 
-# Copyright (C) 2001-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1550,7 +1618,7 @@ fi
 INSTALL_STRIP_PROGRAM="\$(install_sh) -c -s"
 AC_SUBST([INSTALL_STRIP_PROGRAM])])
 
-# Copyright (C) 2006-2014 Free Software Foundation, Inc.
+# Copyright (C) 2006-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
@@ -1569,7 +1637,7 @@ AC_DEFUN([AM_SUBST_NOTMAKE], [_AM_SUBST_NOTMAKE($@)])
 
 # Check how to create a tarball.                            -*- Autoconf -*-
 
-# Copyright (C) 2004-2014 Free Software Foundation, Inc.
+# Copyright (C) 2004-2017 Free Software Foundation, Inc.
 #
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
