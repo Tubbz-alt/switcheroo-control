@@ -12,8 +12,8 @@ Build-Depends: debhelper (>= 10),
                pkg-config (>= 0.22),
                udev,
 Standards-Version: 3.9.8
-Vcs-Git: https://anonscm.debian.org/git/pkg-gnome/switcheroo-control.git
-Vcs-Browser: https://anonscm.debian.org/git/pkg-gnome/switcheroo-control.git
+Vcs-Browser: https://salsa.debian.org/gnome-team/switcheroo-control
+Vcs-Git: https://salsa.debian.org/gnome-team/switcheroo-control.git
 Homepage: https://github.com/hadess/switcheroo-control
 
 Package: switcheroo-control
