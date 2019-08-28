@@ -1,3 +1,11 @@
+switcheroo-control (1.3.1-2) UNRELEASED; urgency=medium
+
+  * debian/patches/gtk-doc-make.patch:
+    - include gtk-doc.make file which is missing from the tarball,
+      it's needed to be able to autoreconf the source
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Wed, 28 Aug 2019 11:12:47 +0200
+
 switcheroo-control (1.3.1-1) unstable; urgency=medium
 
   * New upstream version
