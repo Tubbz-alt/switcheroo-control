@@ -16,12 +16,6 @@ GNOME_COMPILE_WARNINGS([maximum])
 
 GTK_DOC_CHECK([1.11],[--flavour no-tmpl])
 
-AC_ARG_WITH([udevrulesdir],
-	    AS_HELP_STRING([--with-udevrulesdir=DIR], [Directory for udev rules]),
-	    [],
-	    [with_udevrulesdir=$($PKG_CONFIG --variable=udevdir udev)"/rules.d"])
-AC_SUBST([udevrulesdir], [$with_udevrulesdir])
-
 AC_ARG_WITH([systemdsystemunitdir],
 	    AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files]),
 	    [],
