@@ -17,9 +17,19 @@
     <!--
         HasDualGpu:
 
-        Whether two switchable GPUs are present on the system.
+        Whether two switchable GPUs are present on the system. This property
+        has been obsoleted in favour of the "NumGPUs" property.
     -->
     <property name="HasDualGpu" type="b" access="read"/>
+
+    <!--
+        NumGPUs:
+
+        The number of GPUs available on the system. Note that while having no
+        GPUs is unlikely, consumers of this API should probably not throw errors
+        if that were the case.
+    -->
+    <property name="NumGPUs" type="u" access="read"/>
 
   </interface>
 </node>

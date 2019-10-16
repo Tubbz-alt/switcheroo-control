@@ -67,6 +67,8 @@ send_dbus_event (ControlData     *data)
 
 	g_variant_builder_add (&props_builder, "{sv}", "HasDualGpu",
 			       g_variant_new_boolean (data->num_gpus >= 2));
+	g_variant_builder_add (&props_builder, "{sv}", "NumGPUs",
+			       g_variant_new_uint32 (data->num_gpus));
 
 	props_changed = g_variant_new ("(s@a{sv}@as)", CONTROL_PROXY_IFACE_NAME,
 				       g_variant_builder_end (&props_builder),
@@ -95,6 +97,8 @@ handle_get_property (GDBusConnection *connection,
 
 	if (g_strcmp0 (property_name, "HasDualGpu") == 0)
 		return g_variant_new_boolean (data->num_gpus >= 2);
+	if (g_strcmp0 (property_name, "NumGPUs") == 0)
+		return g_variant_new_uint32 (data->num_gpus);
 
 	return NULL;
 }
@@ -191,12 +195,33 @@ get_num_drm_cards (ControlData *data)
 }
 
 static void
+uevent_cb (GUdevClient *client,
+	   gchar       *action,
+	   GUdevDevice *device,
+	   gpointer     user_data)
+{
+	ControlData *data = user_data;
+	guint num_gpus;
+
+	num_gpus = get_num_drm_cards (data);
+	if (num_gpus != data->num_gpus) {
+		g_debug ("GPUs added or removed (old: %d new: %d)",
+			 data->num_gpus, num_gpus);
+		data->num_gpus = num_gpus;
+		send_dbus_event (data);
+	}
+}
+
+static void
 get_num_gpus (ControlData *data)
 {
 	const gchar * const subsystem[] = { "drm", NULL };
 
 	data->client = g_udev_client_new (subsystem);
 	data->num_gpus = get_num_drm_cards (data);
+
+	g_signal_connect (G_OBJECT (data->client), "uevent",
+			  G_CALLBACK (uevent_cb), data);
 }
 
 int main (int argc, char **argv)
@@ -208,13 +233,6 @@ int main (int argc, char **argv)
 	data = g_new0 (ControlData, 1);
 
 	get_num_gpus (data);
-	if (data->num_gpus <= 1) {
-		g_debug ("Single GPU system");
-		g_free (data);
-		return 0;
-	}
-	g_assert (data->num_gpus >= 2);
-
 	setup_dbus (data);
 	data->init_done = TRUE;
 	if (data->connection)
