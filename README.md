@@ -37,21 +37,6 @@ You can use it to launch the [GLArea example application](https://github.com/eba
 to verify that the right video card/GPU is used when launching the application
 normally, and through “Launch using Dedicated Graphics Card”.
 
-Disabling automatic switch to integrated GPU
---------------------------------------------
-
-By default, on startup and whatever the BIOS settings (which might or
-might not be available, depending on the system), we will try to force the
-integrated GPU to be used so that power savings are made by default,
-and the discrete GPU is only used for select applications.
-
-If this causes problems, this behaviour can be disabled by passing
-`xdg.force_integrated=0` as a kernel command-line options in the
-bootloader.
-
-Don't forget to file a bug against your distribution to get the kernel
-or graphics drivers fixed, depending on the exact problem at hand.
-
 Tested on
 ---------
 

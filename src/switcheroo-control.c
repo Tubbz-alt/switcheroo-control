@@ -25,9 +25,6 @@
 
 #define SWITCHEROO_SYSFS_PATH            "/sys/kernel/debug/vgaswitcheroo/switch"
 
-#define FORCE_INTEGRATED_CMD             "DIGD"
-#define FORCE_INTEGRATED_CMD_LEN         (strlen(FORCE_INTEGRATED_CMD))
-
 typedef struct {
 	GMainLoop *loop;
 	GDBusNodeInfo *introspection_data;
@@ -170,78 +167,6 @@ setup_dbus (ControlData *data)
 	return TRUE;
 }
 
-static gboolean
-parse_kernel_cmdline (gboolean *force_igpu)
-{
-	gboolean ret = TRUE;
-	GRegex *regex;
-	GMatchInfo *match;
-	char *contents;
-	char *word;
-	const char *arg;
-
-	if (!g_file_get_contents ("/proc/cmdline", &contents, NULL, NULL))
-		return FALSE;
-
-	regex = g_regex_new ("xdg.force_integrated=(\\S+)", 0, G_REGEX_MATCH_NOTEMPTY, NULL);
-	if (!g_regex_match (regex, contents, G_REGEX_MATCH_NOTEMPTY, &match)) {
-		ret = FALSE;
-		goto out;
-	}
-
-	word = g_match_info_fetch (match, 0);
-	g_debug ("Found command-line match '%s'", word);
-	arg = word + strlen ("xdg.force_integrated=");
-	if (*arg == '0' || *arg == '1') {
-		*force_igpu = atoi (arg);
-	} else if (g_ascii_strcasecmp (arg, "true") == 0 ||
-		   g_ascii_strcasecmp (arg, "on") == 0) {
-		*force_igpu = TRUE;
-	} else if (g_ascii_strcasecmp (arg, "false") == 0 ||
-		   g_ascii_strcasecmp (arg, "off") == 0) {
-		*force_igpu = FALSE;
-	} else {
-		g_warning ("Invalid value '%s' for xdg.force_integrated passed in kernel command line.\n", arg);
-		ret = FALSE;
-	}
-
-	g_free (word);
-
-out:
-	g_match_info_free (match);
-	g_regex_unref (regex);
-	g_free (contents);
-
-	if (ret)
-		g_debug ("Kernel command-line parsed to %d", *force_igpu);
-	else
-		g_debug ("Could not parse kernel command-line");
-
-	return ret;
-}
-
-static void
-force_integrate_card (int fd)
-{
-	int ret;
-	gboolean force_igpu = FALSE;
-
-	if (!parse_kernel_cmdline (&force_igpu))
-		force_igpu = TRUE;
-	if (!force_igpu)
-		return;
-
-	g_debug ("Forcing the integrated card as the default");
-
-	ret = write (fd, FORCE_INTEGRATED_CMD, FORCE_INTEGRATED_CMD_LEN);
-	if (ret < 0) {
-		g_warning ("could not force the integrated card on: %s",
-			   g_strerror (errno));
-	} else {
-		g_debug ("Forced the integrated card as the default successfully");
-	}
-}
-
 int main (int argc, char **argv)
 {
 	ControlData *data;
@@ -255,10 +180,8 @@ int main (int argc, char **argv)
 		return 0;
 	}
 
-	/* Try to force the integrated card to be the default card */
 	fd = open (SWITCHEROO_SYSFS_PATH, O_WRONLY);
 	if (fd > 0) {
-		force_integrate_card (fd);
 		close (fd);
 	} else {
 		int err = errno;
@@ -269,7 +192,7 @@ int main (int argc, char **argv)
 			return 1;
 		}
 
-		g_debug ("SecureBoot mode, can't force integrated card");
+		g_debug ("SecureBoot mode");
 	}
 
 	data = g_new0 (ControlData, 1);
