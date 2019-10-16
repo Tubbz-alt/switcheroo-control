@@ -16,14 +16,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <gio/gio.h>
+#include <gudev/gudev.h>
 
 #include "switcheroo-control-resources.h"
 
 #define CONTROL_PROXY_DBUS_NAME          "net.hadess.SwitcherooControl"
 #define CONTROL_PROXY_DBUS_PATH          "/net/hadess/SwitcherooControl"
 #define CONTROL_PROXY_IFACE_NAME         CONTROL_PROXY_DBUS_NAME
-
-#define SWITCHEROO_SYSFS_PATH            "/sys/kernel/debug/vgaswitcheroo/switch"
 
 typedef struct {
 	GMainLoop *loop;
@@ -32,8 +31,9 @@ typedef struct {
 	guint name_id;
 	gboolean init_done;
 
-	/* Whether switcheroo is available */
-	gboolean available;
+	/* Detection */
+	GUdevClient *client;
+	guint num_gpus;
 } ControlData;
 
 static void
@@ -47,6 +47,7 @@ free_control_data (ControlData *data)
 		data->name_id = 0;
 	}
 
+	g_clear_object (&data->client);
 	g_clear_pointer (&data->introspection_data, g_dbus_node_info_unref);
 	g_clear_object (&data->connection);
 	g_clear_pointer (&data->loop, g_main_loop_unref);
@@ -65,7 +66,7 @@ send_dbus_event (ControlData     *data)
 	g_variant_builder_init (&props_builder, G_VARIANT_TYPE ("a{sv}"));
 
 	g_variant_builder_add (&props_builder, "{sv}", "HasDualGpu",
-			       g_variant_new_boolean (data->available));
+			       g_variant_new_boolean (data->num_gpus >= 2));
 
 	props_changed = g_variant_new ("(s@a{sv}@as)", CONTROL_PROXY_IFACE_NAME,
 				       g_variant_builder_end (&props_builder),
@@ -93,7 +94,7 @@ handle_get_property (GDBusConnection *connection,
 	g_assert (data->connection);
 
 	if (g_strcmp0 (property_name, "HasDualGpu") == 0)
-		return g_variant_new_boolean (data->available);
+		return g_variant_new_boolean (data->num_gpus >= 2);
 
 	return NULL;
 }
@@ -167,36 +168,53 @@ setup_dbus (ControlData *data)
 	return TRUE;
 }
 
+static guint
+get_num_drm_cards (ControlData *data)
+{
+	GList *devices, *l;
+	guint num_cards = 0;
+
+	devices = g_udev_client_query_by_subsystem (data->client, "drm");
+	for (l = devices; l != NULL; l = l->next) {
+		GUdevDevice *d = l->data;
+		const char *path;
+
+		path = g_udev_device_get_device_file (d);
+		if (path != NULL &&
+		    g_str_has_prefix (path, "/dev/dri/render")) {
+			num_cards++;
+		}
+		g_object_unref (d);
+	}
+	g_list_free (devices);
+	return num_cards;
+}
+
+static void
+get_num_gpus (ControlData *data)
+{
+	const gchar * const subsystem[] = { "drm", NULL };
+
+	data->client = g_udev_client_new (subsystem);
+	data->num_gpus = get_num_drm_cards (data);
+}
+
 int main (int argc, char **argv)
 {
 	ControlData *data;
-	int fd;
 
 	/* g_setenv ("G_MESSAGES_DEBUG", "all", TRUE); */
 
-	/* Check for VGA switcheroo availability */
-	if (!g_file_test (SWITCHEROO_SYSFS_PATH, G_FILE_TEST_IS_REGULAR)) {
-		g_debug ("No switcheroo support available");
+	data = g_new0 (ControlData, 1);
+
+	get_num_gpus (data);
+	if (data->num_gpus <= 1) {
+		g_debug ("Single GPU system");
+		g_free (data);
 		return 0;
 	}
+	g_assert (data->num_gpus >= 2);
 
-	fd = open (SWITCHEROO_SYSFS_PATH, O_WRONLY);
-	if (fd > 0) {
-		close (fd);
-	} else {
-		int err = errno;
-
-		if (err != EPERM) {
-			g_warning ("switcheroo-control could not query vga_switcheroo status: %s",
-				   g_strerror (err));
-			return 1;
-		}
-
-		g_debug ("SecureBoot mode");
-	}
-
-	data = g_new0 (ControlData, 1);
-	data->available = TRUE;
 	setup_dbus (data);
 	data->init_done = TRUE;
 	if (data->connection)
