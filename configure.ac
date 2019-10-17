@@ -24,9 +24,16 @@ if test x$with_systemdsystemunitdir != xno; then
 	AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 fi
 
+AC_ARG_WITH([hwdbdir],
+           AS_HELP_STRING([--with-hwdbdir=DIR], [Directory for hwdb files]),
+           [],
+           [with_hwdbdir=$($PKG_CONFIG --variable=udevdir udev)"/hwdb.d"])
+AC_SUBST([hwdbdir], [$with_hwdbdir])
+
 PKG_CHECK_MODULES(SWITCHEROO_CONTROL, gio-2.0 gudev-1.0 >= 232)
 
 AC_PATH_PROG([GDBUS_CODEGEN],[gdbus-codegen])
+AC_PATH_PROG([SYSTEMD_HWDB],[systemd-hwdb])
 
 AC_CONFIG_FILES([
 	Makefile

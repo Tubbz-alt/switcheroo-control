@@ -7,6 +7,14 @@ switcheroo-control.service: switcheroo-control.service.in Makefile
 dbusconfdir = $(sysconfdir)/dbus-1/system.d
 dbusconf_DATA = net.hadess.SwitcherooControl.conf
 
+hwdb_DATA = 30-pci-intel-gpu.hwdb
+
+install-data-hook:
+	$(SYSTEMD_HWDB) update || :
+
+uninstall-hook:
+	$(SYSTEMD_HWDB) update || :
+
 CLEANFILES = switcheroo-control.service
 EXTRA_DIST =				\
 	$(dbusconf_DATA)		\
