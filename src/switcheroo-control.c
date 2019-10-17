@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE
 
+#include <locale.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -18,6 +19,7 @@
 #include <gio/gio.h>
 #include <gudev/gudev.h>
 
+#include "info-cleanup.h"
 #include "switcheroo-control-resources.h"
 
 #define CONTROL_PROXY_DBUS_NAME          "net.hadess.SwitcherooControl"
@@ -182,6 +184,7 @@ get_card_name (GUdevDevice *d)
 {
 	const char *vendor, *product;
 	g_autoptr(GUdevDevice) parent;
+	g_autofree char *renderer = NULL;
 
 	parent = g_udev_device_get_parent (d);
 	vendor = g_udev_device_get_property (parent, "ID_VENDOR_FROM_DATABASE");
@@ -194,7 +197,8 @@ get_card_name (GUdevDevice *d)
 		return g_strdup (product);
 	if (!product)
 		return g_strdup (vendor);
-	return g_strdup_printf ("%s %s", vendor, product);
+	renderer = g_strdup_printf ("%s %s", vendor, product);
+	return info_cleanup (renderer);
 
 bail:
 	return g_strdup ("Unknown Graphics Controller");
@@ -263,6 +267,8 @@ get_num_gpus (ControlData *data)
 int main (int argc, char **argv)
 {
 	ControlData *data;
+
+	setlocale (LC_ALL, "");
 
 	/* g_setenv ("G_MESSAGES_DEBUG", "all", TRUE); */
 
