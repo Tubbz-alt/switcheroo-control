@@ -34,6 +34,7 @@ typedef struct {
 	/* Detection */
 	GUdevClient *client;
 	guint num_gpus;
+	GPtrArray *cards;
 } ControlData;
 
 static void
@@ -69,6 +70,8 @@ send_dbus_event (ControlData     *data)
 			       g_variant_new_boolean (data->num_gpus >= 2));
 	g_variant_builder_add (&props_builder, "{sv}", "NumGPUs",
 			       g_variant_new_uint32 (data->num_gpus));
+	g_variant_builder_add (&props_builder, "{sv}", "GPUs",
+			       g_variant_new_strv ((const gchar * const *) data->cards->pdata, data->cards->len));
 
 	props_changed = g_variant_new ("(s@a{sv}@as)", CONTROL_PROXY_IFACE_NAME,
 				       g_variant_builder_end (&props_builder),
@@ -99,6 +102,8 @@ handle_get_property (GDBusConnection *connection,
 		return g_variant_new_boolean (data->num_gpus >= 2);
 	if (g_strcmp0 (property_name, "NumGPUs") == 0)
 		return g_variant_new_uint32 (data->num_gpus);
+	if (g_strcmp0 (property_name, "GPUs") == 0)
+		return g_variant_new_strv ((const gchar * const *) data->cards->pdata, data->cards->len);
 
 	return NULL;
 }
@@ -172,12 +177,36 @@ setup_dbus (ControlData *data)
 	return TRUE;
 }
 
-static guint
-get_num_drm_cards (ControlData *data)
+static char *
+get_card_name (GUdevDevice *d)
+{
+	const char *vendor, *product;
+	g_autoptr(GUdevDevice) parent;
+
+	parent = g_udev_device_get_parent (d);
+	vendor = g_udev_device_get_property (parent, "ID_VENDOR_FROM_DATABASE");
+	product = g_udev_device_get_property (parent, "ID_MODEL_FROM_DATABASE");
+
+	if (!vendor && !product)
+		goto bail;
+
+	if (!vendor)
+		return g_strdup (product);
+	if (!product)
+		return g_strdup (vendor);
+	return g_strdup_printf ("%s %s", vendor, product);
+
+bail:
+	return g_strdup ("Unknown Graphics Controller");
+}
+
+static GPtrArray *
+get_drm_cards (ControlData *data)
 {
 	GList *devices, *l;
-	guint num_cards = 0;
+	GPtrArray *cards;
 
+	cards = g_ptr_array_new_with_free_func ((GDestroyNotify) g_free);
 	devices = g_udev_client_query_by_subsystem (data->client, "drm");
 	for (l = devices; l != NULL; l = l->next) {
 		GUdevDevice *d = l->data;
@@ -186,12 +215,14 @@ get_num_drm_cards (ControlData *data)
 		path = g_udev_device_get_device_file (d);
 		if (path != NULL &&
 		    g_str_has_prefix (path, "/dev/dri/render")) {
-			num_cards++;
+			char *name;
+			name = get_card_name (d);
+			g_ptr_array_add (cards, name);
 		}
 		g_object_unref (d);
 	}
 	g_list_free (devices);
-	return num_cards;
+	return cards;
 }
 
 static void
@@ -201,13 +232,17 @@ uevent_cb (GUdevClient *client,
 	   gpointer     user_data)
 {
 	ControlData *data = user_data;
+	GPtrArray *cards;
 	guint num_gpus;
 
-	num_gpus = get_num_drm_cards (data);
+	cards = get_drm_cards (data);
+	num_gpus = cards->len;
 	if (num_gpus != data->num_gpus) {
 		g_debug ("GPUs added or removed (old: %d new: %d)",
 			 data->num_gpus, num_gpus);
-		data->num_gpus = num_gpus;
+		g_ptr_array_free (data->cards, TRUE);
+		data->cards = cards;
+		data->num_gpus = cards->len;
 		send_dbus_event (data);
 	}
 }
@@ -218,7 +253,8 @@ get_num_gpus (ControlData *data)
 	const gchar * const subsystem[] = { "drm", NULL };
 
 	data->client = g_udev_client_new (subsystem);
-	data->num_gpus = get_num_drm_cards (data);
+	data->cards = get_drm_cards (data);
+	data->num_gpus = data->cards->len;
 
 	g_signal_connect (G_OBJECT (data->client), "uevent",
 			  G_CALLBACK (uevent_cb), data);

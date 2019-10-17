@@ -31,5 +31,13 @@
     -->
     <property name="NumGPUs" type="u" access="read"/>
 
+    <!--
+        GPUs:
+
+        A user-facing string in a similar format to that usually exported for
+        individual renderers by Mesa.
+    -->
+    <property name="GPUs" type="as" access="read"/>
+
   </interface>
 </node>
