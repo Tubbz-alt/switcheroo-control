@@ -41,8 +41,8 @@ print_table (pci_id *table)
 
 		if (!g_str_has_prefix (name, "Intel(R) "))
 			g_error ("Unhandled name %s", name);
-		g_print (" ID_VENDOR_FROM_DATABASE=Intel(R)\n");
-		g_print (" ID_MODEL_FROM_DATABASE=%s\n", name + strlen ("Intel(R) "));
+		g_print (" SWITCHEROO_CONTROL_VENDOR_NAME=Intel(R)\n");
+		g_print (" SWITCHEROO_CONTROL_PRODUCT_NAME=%s\n", name + strlen ("Intel(R) "));
 		g_print ("\n");
 	}
 }

@@ -294,8 +294,12 @@ get_card_name (GUdevDevice *d)
 	g_autofree char *renderer = NULL;
 
 	parent = g_udev_device_get_parent (d);
-	vendor = g_udev_device_get_property (parent, "ID_VENDOR_FROM_DATABASE");
-	product = g_udev_device_get_property (parent, "ID_MODEL_FROM_DATABASE");
+	vendor = g_udev_device_get_property (parent, "SWITCHEROO_CONTROL_VENDOR_NAME");
+	if (!vendor || *vendor == '\0')
+		vendor = g_udev_device_get_property (parent, "ID_VENDOR_FROM_DATABASE");
+	product = g_udev_device_get_property (parent, "SWITCHEROO_CONTROL_PRODUCT_NAME");
+	if (!product || *product == '\0')
+		product = g_udev_device_get_property (parent, "ID_MODEL_FROM_DATABASE");
 
 	if (!vendor && !product)
 		goto bail;
