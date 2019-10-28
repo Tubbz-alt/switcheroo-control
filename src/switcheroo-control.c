@@ -27,6 +27,12 @@
 #define CONTROL_PROXY_IFACE_NAME         CONTROL_PROXY_DBUS_NAME
 
 typedef struct {
+	GUdevDevice *dev;
+	char *name;
+	GPtrArray *env;
+} CardData;
+
+typedef struct {
 	GMainLoop *loop;
 	GDBusNodeInfo *introspection_data;
 	GDBusConnection *connection;
@@ -36,8 +42,19 @@ typedef struct {
 	/* Detection */
 	GUdevClient *client;
 	guint num_gpus;
-	GPtrArray *cards;
+	GPtrArray *cards; /* array of CardData */
 } ControlData;
+
+static void
+free_card_data (CardData *data)
+{
+	if (data == NULL)
+		return;
+
+	g_object_unref (data->dev);
+	g_free (data->name);
+	g_ptr_array_free (data->env, TRUE);
+}
 
 static void
 free_control_data (ControlData *data)
@@ -57,9 +74,31 @@ free_control_data (ControlData *data)
 	g_free (data);
 }
 
+static GVariant *
+build_gpus_variant (ControlData *data)
+{
+	GVariantBuilder builder;
+	guint i;
+
+	g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
+
+	for (i = 0; i < data->cards->len; i++) {
+		CardData *card = data->cards->pdata[i];
+		GVariantBuilder asv_builder;
+
+		g_variant_builder_init (&asv_builder, G_VARIANT_TYPE ("a{sv}"));
+		g_variant_builder_add (&asv_builder, "{sv}", "Name", g_variant_new_string (card->name));
+		g_variant_builder_add (&asv_builder, "{sv}", "Environment",
+				       g_variant_new_strv ((const gchar * const *) card->env->pdata, card->env->len));
+
+		g_variant_builder_add (&builder, "a{sv}", &asv_builder);
+	}
+
+	return g_variant_builder_end (&builder);
+}
 
 static void
-send_dbus_event (ControlData     *data)
+send_dbus_event (ControlData *data)
 {
 	GVariantBuilder props_builder;
 	GVariant *props_changed = NULL;
@@ -73,7 +112,7 @@ send_dbus_event (ControlData     *data)
 	g_variant_builder_add (&props_builder, "{sv}", "NumGPUs",
 			       g_variant_new_uint32 (data->num_gpus));
 	g_variant_builder_add (&props_builder, "{sv}", "GPUs",
-			       g_variant_new_strv ((const gchar * const *) data->cards->pdata, data->cards->len));
+			       build_gpus_variant (data));
 
 	props_changed = g_variant_new ("(s@a{sv}@as)", CONTROL_PROXY_IFACE_NAME,
 				       g_variant_builder_end (&props_builder),
@@ -105,7 +144,7 @@ handle_get_property (GDBusConnection *connection,
 	if (g_strcmp0 (property_name, "NumGPUs") == 0)
 		return g_variant_new_uint32 (data->num_gpus);
 	if (g_strcmp0 (property_name, "GPUs") == 0)
-		return g_variant_new_strv ((const gchar * const *) data->cards->pdata, data->cards->len);
+		return build_gpus_variant (data);
 
 	return NULL;
 }
@@ -180,6 +219,71 @@ setup_dbus (ControlData *data)
 }
 
 static char *
+get_card_id_path (GUdevClient *client,
+		  GUdevDevice *dev,
+		  GUdevDevice *parent)
+{
+	GList *devices, *l;
+	char *ret = NULL;
+
+	/* Metadata from the sibling "card" device */
+	devices = g_udev_client_query_by_subsystem (client, "drm");
+	for (l = devices; l != NULL; l = l->next) {
+		GUdevDevice *d = l->data;
+		g_autoptr(GUdevDevice) p = NULL;
+		const char *path;
+
+		p = g_udev_device_get_parent (d);
+		if (g_strcmp0 (g_udev_device_get_sysfs_path (p),
+			       g_udev_device_get_sysfs_path (parent)) != 0) {
+			continue;
+		}
+
+		path = g_udev_device_get_device_file (d);
+		if (path != NULL &&
+		    g_str_has_prefix (path, "/dev/dri/card")) {
+			ret = g_strdup (g_udev_device_get_property (d, "ID_PATH_TAG"));
+			break;
+		}
+	}
+	g_list_free_full (devices, (GDestroyNotify) g_object_unref);
+
+	return ret;
+}
+
+static GPtrArray *
+get_card_env (GUdevClient *client,
+	      GUdevDevice *dev)
+{
+	GPtrArray *array;
+	g_autoptr(GUdevDevice) parent;
+
+	array = g_ptr_array_new_full (0, g_free);
+
+	parent = g_udev_device_get_parent (dev);
+	if (g_strcmp0 (g_udev_device_get_driver (parent), "nvidia") == 0) {
+		g_ptr_array_add (array, g_strdup ("__GLX_VENDOR_LIBRARY_NAME"));
+		g_ptr_array_add (array, g_strdup ("nvidia"));
+
+		/* XXX: __NV_PRIME_RENDER_OFFLOAD_PROVIDER would be needed for
+		 * multi-NVidia setups, see:
+		 * https://download.nvidia.com/XFree86/Linux-x86_64/440.26/README/primerenderoffload.html */
+		g_ptr_array_add (array, g_strdup ("__NV_PRIME_RENDER_OFFLOAD"));
+		g_ptr_array_add (array, g_strdup ("1"));
+	} else {
+		char *id;
+
+		/* See the Mesa loader code:
+		 * https://gitlab.freedesktop.org/mesa/mesa/blob/master/src/loader/loader.c#L322 */
+		id = get_card_id_path (client, dev, parent);
+		g_ptr_array_add (array, g_strdup ("DRI_PRIME"));
+		g_ptr_array_add (array, id);
+	}
+
+	return array;
+}
+
+static char *
 get_card_name (GUdevDevice *d)
 {
 	const char *vendor, *product;
@@ -204,13 +308,27 @@ bail:
 	return g_strdup ("Unknown Graphics Controller");
 }
 
+static CardData *
+get_card_data (GUdevClient *client,
+	       GUdevDevice *d)
+{
+	CardData *data;
+
+	data = g_new0 (CardData, 1);
+	data->dev = g_object_ref (d);
+	data->name = get_card_name (d);
+	data->env = get_card_env (client, d);
+
+	return data;
+}
+
 static GPtrArray *
 get_drm_cards (ControlData *data)
 {
 	GList *devices, *l;
 	GPtrArray *cards;
 
-	cards = g_ptr_array_new_with_free_func ((GDestroyNotify) g_free);
+	cards = g_ptr_array_new_with_free_func ((GDestroyNotify) free_card_data);
 	devices = g_udev_client_query_by_subsystem (data->client, "drm");
 	for (l = devices; l != NULL; l = l->next) {
 		GUdevDevice *d = l->data;
@@ -219,9 +337,9 @@ get_drm_cards (ControlData *data)
 		path = g_udev_device_get_device_file (d);
 		if (path != NULL &&
 		    g_str_has_prefix (path, "/dev/dri/render")) {
-			char *name;
-			name = get_card_name (d);
-			g_ptr_array_add (cards, name);
+			CardData *card;
+			card = get_card_data (data->client, d);
+			g_ptr_array_add (cards, card);
 		}
 		g_object_unref (d);
 	}

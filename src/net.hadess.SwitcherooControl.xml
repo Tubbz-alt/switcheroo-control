@@ -34,10 +34,12 @@
     <!--
         GPUs:
 
-        A user-facing string in a similar format to that usually exported for
-        individual renderers by Mesa.
+        An array of key-pair values representing each GPU. The key named "Name" (s)
+        will contain a user-facing name for the GPU, the "Environment" (as) key will
+        contain an array of even number of strings, each being an environment
+        variable to set to use the GPU, followed by its value.
     -->
-    <property name="GPUs" type="as" access="read"/>
+    <property name="GPUs" type="a(a{sv})" access="read"/>
 
   </interface>
 </node>
