@@ -344,6 +344,26 @@ get_drm_cards (ControlData *data)
 		g_object_unref (d);
 	}
 	g_list_free (devices);
+
+#if 0
+	{
+		CardData *card;
+		const char *env[] = {
+			"TRIDENT_OFFLOADING", "1",
+			NULL
+		};
+		guint i;
+
+		card = g_new0 (CardData, 1);
+		card->name = "Trident Vesa Local Bus 512KB";
+		card->env = g_ptr_array_new ();
+		for (i = 0; env[i] != NULL; i++)
+			g_ptr_array_add (card->env, g_strdup (env[i]));
+
+		g_ptr_array_add (cards, card);
+	}
+#endif
+
 	return cards;
 }
 
