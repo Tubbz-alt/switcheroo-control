@@ -248,6 +248,8 @@ uevent_cb (GUdevClient *client,
 		data->cards = cards;
 		data->num_gpus = cards->len;
 		send_dbus_event (data);
+	} else {
+		g_ptr_array_free (cards, TRUE);
 	}
 }
 
