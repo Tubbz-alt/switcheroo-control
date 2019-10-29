@@ -30,6 +30,7 @@ typedef struct {
 	GUdevDevice *dev;
 	char *name;
 	GPtrArray *env;
+	gboolean is_default;
 } CardData;
 
 typedef struct {
@@ -90,6 +91,8 @@ build_gpus_variant (ControlData *data)
 		g_variant_builder_add (&asv_builder, "{sv}", "Name", g_variant_new_string (card->name));
 		g_variant_builder_add (&asv_builder, "{sv}", "Environment",
 				       g_variant_new_strv ((const gchar * const *) card->env->pdata, card->env->len));
+		g_variant_builder_add (&asv_builder, "{sv}", "Default",
+				       g_variant_new_boolean (card->is_default));
 
 		g_variant_builder_add (&builder, "a{sv}", &asv_builder);
 	}
@@ -308,6 +311,15 @@ bail:
 	return g_strdup ("Unknown Graphics Controller");
 }
 
+static gboolean
+get_card_is_default (GUdevDevice *d)
+{
+	g_autoptr(GUdevDevice) parent;
+
+	parent = g_udev_device_get_parent (d);
+	return g_udev_device_get_sysfs_attr_as_boolean (parent, "boot_vga");
+}
+
 static CardData *
 get_card_data (GUdevClient *client,
 	       GUdevDevice *d)
@@ -318,6 +330,7 @@ get_card_data (GUdevClient *client,
 	data->dev = g_object_ref (d);
 	data->name = get_card_name (d);
 	data->env = get_card_env (client, d);
+	data->is_default = get_card_is_default (d);
 
 	return data;
 }

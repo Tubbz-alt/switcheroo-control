@@ -37,7 +37,8 @@
         An array of key-pair values representing each GPU. The key named "Name" (s)
         will contain a user-facing name for the GPU, the "Environment" (as) key will
         contain an array of even number of strings, each being an environment
-        variable to set to use the GPU, followed by its value.
+        variable to set to use the GPU, followed by its value, the "Default" (b) key
+        will tag the default (usually integrated) GPU.
     -->
     <property name="GPUs" type="a(a{sv})" access="read"/>
 
