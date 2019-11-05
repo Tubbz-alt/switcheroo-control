@@ -11,3 +11,4 @@ build:
     - ./autogen.sh --disable-dependency-tracking
     - make
     - make install
+    - make distcheck
