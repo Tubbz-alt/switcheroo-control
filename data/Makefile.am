@@ -18,6 +18,7 @@ uninstall-hook:
 CLEANFILES = switcheroo-control.service
 EXTRA_DIST =				\
 	$(dbusconf_DATA)		\
+	$(hwdb_DATA)			\
 	$(systemdservice_in_files)	\
 	scripts/generate-hwdb.c		\
 	scripts/Makefile
