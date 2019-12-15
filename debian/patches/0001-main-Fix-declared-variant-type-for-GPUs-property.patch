@@ -1,0 +1,28 @@
+From: Bastien Nocera <hadess@hadess.net>
+Date: Wed, 4 Dec 2019 19:02:21 +0100
+Subject: main: Fix declared variant type for GPUs property
+
+We were declaring a variant of type "a(a{sv})" but constructing a
+variant of type "aa{sv}".
+
+Change the introspection XML to match the code.
+
+Spotted by Tim Crawford
+https://gitlab.gnome.org/GNOME/gnome-shell/merge_requests/781#note_662413
+---
+ src/net.hadess.SwitcherooControl.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/net.hadess.SwitcherooControl.xml b/src/net.hadess.SwitcherooControl.xml
+index 762d023..e52bc1a 100644
+--- a/src/net.hadess.SwitcherooControl.xml
++++ b/src/net.hadess.SwitcherooControl.xml
+@@ -40,7 +40,7 @@
+         variable to set to use the GPU, followed by its value, the "Default" (b) key
+         will tag the default (usually integrated) GPU.
+     -->
+-    <property name="GPUs" type="a(a{sv})" access="read"/>
++    <property name="GPUs" type="aa{sv}" access="read"/>
+ 
+   </interface>
+ </node>
