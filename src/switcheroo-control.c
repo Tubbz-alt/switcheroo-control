@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE
 
+#include <locale.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -16,17 +17,21 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <gio/gio.h>
+#include <gudev/gudev.h>
 
+#include "info-cleanup.h"
 #include "switcheroo-control-resources.h"
 
 #define CONTROL_PROXY_DBUS_NAME          "net.hadess.SwitcherooControl"
 #define CONTROL_PROXY_DBUS_PATH          "/net/hadess/SwitcherooControl"
 #define CONTROL_PROXY_IFACE_NAME         CONTROL_PROXY_DBUS_NAME
 
-#define SWITCHEROO_SYSFS_PATH            "/sys/kernel/debug/vgaswitcheroo/switch"
-
-#define FORCE_INTEGRATED_CMD             "DIGD"
-#define FORCE_INTEGRATED_CMD_LEN         (strlen(FORCE_INTEGRATED_CMD))
+typedef struct {
+	GUdevDevice *dev;
+	char *name;
+	GPtrArray *env;
+	gboolean is_default;
+} CardData;
 
 typedef struct {
 	GMainLoop *loop;
@@ -35,9 +40,22 @@ typedef struct {
 	guint name_id;
 	gboolean init_done;
 
-	/* Whether switcheroo is available */
-	gboolean available;
+	/* Detection */
+	GUdevClient *client;
+	guint num_gpus;
+	GPtrArray *cards; /* array of CardData */
 } ControlData;
+
+static void
+free_card_data (CardData *data)
+{
+	if (data == NULL)
+		return;
+
+	g_object_unref (data->dev);
+	g_free (data->name);
+	g_ptr_array_free (data->env, TRUE);
+}
 
 static void
 free_control_data (ControlData *data)
@@ -50,15 +68,40 @@ free_control_data (ControlData *data)
 		data->name_id = 0;
 	}
 
+	g_clear_object (&data->client);
 	g_clear_pointer (&data->introspection_data, g_dbus_node_info_unref);
 	g_clear_object (&data->connection);
 	g_clear_pointer (&data->loop, g_main_loop_unref);
 	g_free (data);
 }
 
+static GVariant *
+build_gpus_variant (ControlData *data)
+{
+	GVariantBuilder builder;
+	guint i;
+
+	g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
+
+	for (i = 0; i < data->cards->len; i++) {
+		CardData *card = data->cards->pdata[i];
+		GVariantBuilder asv_builder;
+
+		g_variant_builder_init (&asv_builder, G_VARIANT_TYPE ("a{sv}"));
+		g_variant_builder_add (&asv_builder, "{sv}", "Name", g_variant_new_string (card->name));
+		g_variant_builder_add (&asv_builder, "{sv}", "Environment",
+				       g_variant_new_strv ((const gchar * const *) card->env->pdata, card->env->len));
+		g_variant_builder_add (&asv_builder, "{sv}", "Default",
+				       g_variant_new_boolean (card->is_default));
+
+		g_variant_builder_add (&builder, "a{sv}", &asv_builder);
+	}
+
+	return g_variant_builder_end (&builder);
+}
 
 static void
-send_dbus_event (ControlData     *data)
+send_dbus_event (ControlData *data)
 {
 	GVariantBuilder props_builder;
 	GVariant *props_changed = NULL;
@@ -68,7 +111,11 @@ send_dbus_event (ControlData     *data)
 	g_variant_builder_init (&props_builder, G_VARIANT_TYPE ("a{sv}"));
 
 	g_variant_builder_add (&props_builder, "{sv}", "HasDualGpu",
-			       g_variant_new_boolean (data->available));
+			       g_variant_new_boolean (data->num_gpus >= 2));
+	g_variant_builder_add (&props_builder, "{sv}", "NumGPUs",
+			       g_variant_new_uint32 (data->num_gpus));
+	g_variant_builder_add (&props_builder, "{sv}", "GPUs",
+			       build_gpus_variant (data));
 
 	props_changed = g_variant_new ("(s@a{sv}@as)", CONTROL_PROXY_IFACE_NAME,
 				       g_variant_builder_end (&props_builder),
@@ -96,7 +143,11 @@ handle_get_property (GDBusConnection *connection,
 	g_assert (data->connection);
 
 	if (g_strcmp0 (property_name, "HasDualGpu") == 0)
-		return g_variant_new_boolean (data->available);
+		return g_variant_new_boolean (data->num_gpus >= 2);
+	if (g_strcmp0 (property_name, "NumGPUs") == 0)
+		return g_variant_new_uint32 (data->num_gpus);
+	if (g_strcmp0 (property_name, "GPUs") == 0)
+		return build_gpus_variant (data);
 
 	return NULL;
 }
@@ -170,110 +221,217 @@ setup_dbus (ControlData *data)
 	return TRUE;
 }
 
-static gboolean
-parse_kernel_cmdline (gboolean *force_igpu)
+static char *
+get_card_id_path (GUdevClient *client,
+		  GUdevDevice *dev,
+		  GUdevDevice *parent)
 {
-	gboolean ret = TRUE;
-	GRegex *regex;
-	GMatchInfo *match;
-	char *contents;
-	char *word;
-	const char *arg;
+	GList *devices, *l;
+	char *ret = NULL;
 
-	if (!g_file_get_contents ("/proc/cmdline", &contents, NULL, NULL))
-		return FALSE;
+	/* Metadata from the sibling "card" device */
+	devices = g_udev_client_query_by_subsystem (client, "drm");
+	for (l = devices; l != NULL; l = l->next) {
+		GUdevDevice *d = l->data;
+		g_autoptr(GUdevDevice) p = NULL;
+		const char *path;
 
-	regex = g_regex_new ("xdg.force_integrated=(\\S+)", 0, G_REGEX_MATCH_NOTEMPTY, NULL);
-	if (!g_regex_match (regex, contents, G_REGEX_MATCH_NOTEMPTY, &match)) {
-		ret = FALSE;
-		goto out;
+		p = g_udev_device_get_parent (d);
+		if (g_strcmp0 (g_udev_device_get_sysfs_path (p),
+			       g_udev_device_get_sysfs_path (parent)) != 0) {
+			continue;
+		}
+
+		path = g_udev_device_get_device_file (d);
+		if (path != NULL &&
+		    g_str_has_prefix (path, "/dev/dri/card")) {
+			ret = g_strdup (g_udev_device_get_property (d, "ID_PATH_TAG"));
+			break;
+		}
 	}
-
-	word = g_match_info_fetch (match, 0);
-	g_debug ("Found command-line match '%s'", word);
-	arg = word + strlen ("xdg.force_integrated=");
-	if (*arg == '0' || *arg == '1') {
-		*force_igpu = atoi (arg);
-	} else if (g_ascii_strcasecmp (arg, "true") == 0 ||
-		   g_ascii_strcasecmp (arg, "on") == 0) {
-		*force_igpu = TRUE;
-	} else if (g_ascii_strcasecmp (arg, "false") == 0 ||
-		   g_ascii_strcasecmp (arg, "off") == 0) {
-		*force_igpu = FALSE;
-	} else {
-		g_warning ("Invalid value '%s' for xdg.force_integrated passed in kernel command line.\n", arg);
-		ret = FALSE;
-	}
-
-	g_free (word);
-
-out:
-	g_match_info_free (match);
-	g_regex_unref (regex);
-	g_free (contents);
-
-	if (ret)
-		g_debug ("Kernel command-line parsed to %d", *force_igpu);
-	else
-		g_debug ("Could not parse kernel command-line");
+	g_list_free_full (devices, (GDestroyNotify) g_object_unref);
 
 	return ret;
 }
 
-static void
-force_integrate_card (int fd)
+static GPtrArray *
+get_card_env (GUdevClient *client,
+	      GUdevDevice *dev)
 {
-	int ret;
-	gboolean force_igpu = FALSE;
+	GPtrArray *array;
+	g_autoptr(GUdevDevice) parent;
 
-	if (!parse_kernel_cmdline (&force_igpu))
-		force_igpu = TRUE;
-	if (!force_igpu)
-		return;
+	array = g_ptr_array_new_full (0, g_free);
 
-	g_debug ("Forcing the integrated card as the default");
+	parent = g_udev_device_get_parent (dev);
+	if (g_strcmp0 (g_udev_device_get_driver (parent), "nvidia") == 0) {
+		g_ptr_array_add (array, g_strdup ("__GLX_VENDOR_LIBRARY_NAME"));
+		g_ptr_array_add (array, g_strdup ("nvidia"));
 
-	ret = write (fd, FORCE_INTEGRATED_CMD, FORCE_INTEGRATED_CMD_LEN);
-	if (ret < 0) {
-		g_warning ("could not force the integrated card on: %s",
-			   g_strerror (errno));
+		/* XXX: __NV_PRIME_RENDER_OFFLOAD_PROVIDER would be needed for
+		 * multi-NVidia setups, see:
+		 * https://download.nvidia.com/XFree86/Linux-x86_64/440.26/README/primerenderoffload.html */
+		g_ptr_array_add (array, g_strdup ("__NV_PRIME_RENDER_OFFLOAD"));
+		g_ptr_array_add (array, g_strdup ("1"));
 	} else {
-		g_debug ("Forced the integrated card as the default successfully");
+		char *id;
+
+		/* See the Mesa loader code:
+		 * https://gitlab.freedesktop.org/mesa/mesa/blob/master/src/loader/loader.c#L322 */
+		id = get_card_id_path (client, dev, parent);
+		g_ptr_array_add (array, g_strdup ("DRI_PRIME"));
+		g_ptr_array_add (array, id);
 	}
+
+	return array;
+}
+
+static char *
+get_card_name (GUdevDevice *d)
+{
+	const char *vendor, *product;
+	g_autoptr(GUdevDevice) parent;
+	g_autofree char *renderer = NULL;
+
+	parent = g_udev_device_get_parent (d);
+	vendor = g_udev_device_get_property (parent, "SWITCHEROO_CONTROL_VENDOR_NAME");
+	if (!vendor || *vendor == '\0')
+		vendor = g_udev_device_get_property (parent, "ID_VENDOR_FROM_DATABASE");
+	product = g_udev_device_get_property (parent, "SWITCHEROO_CONTROL_PRODUCT_NAME");
+	if (!product || *product == '\0')
+		product = g_udev_device_get_property (parent, "ID_MODEL_FROM_DATABASE");
+
+	if (!vendor && !product)
+		goto bail;
+
+	if (!vendor)
+		return g_strdup (product);
+	if (!product)
+		return g_strdup (vendor);
+	renderer = g_strdup_printf ("%s %s", vendor, product);
+	return info_cleanup (renderer);
+
+bail:
+	return g_strdup ("Unknown Graphics Controller");
+}
+
+static gboolean
+get_card_is_default (GUdevDevice *d)
+{
+	g_autoptr(GUdevDevice) parent;
+
+	parent = g_udev_device_get_parent (d);
+	return g_udev_device_get_sysfs_attr_as_boolean (parent, "boot_vga");
+}
+
+static CardData *
+get_card_data (GUdevClient *client,
+	       GUdevDevice *d)
+{
+	CardData *data;
+
+	data = g_new0 (CardData, 1);
+	data->dev = g_object_ref (d);
+	data->name = get_card_name (d);
+	data->env = get_card_env (client, d);
+	data->is_default = get_card_is_default (d);
+
+	return data;
+}
+
+static GPtrArray *
+get_drm_cards (ControlData *data)
+{
+	GList *devices, *l;
+	GPtrArray *cards;
+
+	cards = g_ptr_array_new_with_free_func ((GDestroyNotify) free_card_data);
+	devices = g_udev_client_query_by_subsystem (data->client, "drm");
+	for (l = devices; l != NULL; l = l->next) {
+		GUdevDevice *d = l->data;
+		const char *path;
+
+		path = g_udev_device_get_device_file (d);
+		if (path != NULL &&
+		    g_str_has_prefix (path, "/dev/dri/render")) {
+			CardData *card;
+			card = get_card_data (data->client, d);
+			g_ptr_array_add (cards, card);
+		}
+		g_object_unref (d);
+	}
+	g_list_free (devices);
+
+#if 0
+	{
+		CardData *card;
+		const char *env[] = {
+			"TRIDENT_OFFLOADING", "1",
+			NULL
+		};
+		guint i;
+
+		card = g_new0 (CardData, 1);
+		card->name = "Trident Vesa Local Bus 512KB";
+		card->env = g_ptr_array_new ();
+		for (i = 0; env[i] != NULL; i++)
+			g_ptr_array_add (card->env, g_strdup (env[i]));
+
+		g_ptr_array_add (cards, card);
+	}
+#endif
+
+	return cards;
+}
+
+static void
+uevent_cb (GUdevClient *client,
+	   gchar       *action,
+	   GUdevDevice *device,
+	   gpointer     user_data)
+{
+	ControlData *data = user_data;
+	GPtrArray *cards;
+	guint num_gpus;
+
+	cards = get_drm_cards (data);
+	num_gpus = cards->len;
+	if (num_gpus != data->num_gpus) {
+		g_debug ("GPUs added or removed (old: %d new: %d)",
+			 data->num_gpus, num_gpus);
+		g_ptr_array_free (data->cards, TRUE);
+		data->cards = cards;
+		data->num_gpus = cards->len;
+		send_dbus_event (data);
+	} else {
+		g_ptr_array_free (cards, TRUE);
+	}
+}
+
+static void
+get_num_gpus (ControlData *data)
+{
+	const gchar * const subsystem[] = { "drm", NULL };
+
+	data->client = g_udev_client_new (subsystem);
+	data->cards = get_drm_cards (data);
+	data->num_gpus = data->cards->len;
+
+	g_signal_connect (G_OBJECT (data->client), "uevent",
+			  G_CALLBACK (uevent_cb), data);
 }
 
 int main (int argc, char **argv)
 {
 	ControlData *data;
-	int fd;
+
+	setlocale (LC_ALL, "");
 
 	/* g_setenv ("G_MESSAGES_DEBUG", "all", TRUE); */
 
-	/* Check for VGA switcheroo availability */
-	if (!g_file_test (SWITCHEROO_SYSFS_PATH, G_FILE_TEST_IS_REGULAR)) {
-		g_debug ("No switcheroo support available");
-		return 0;
-	}
-
-	/* Try to force the integrated card to be the default card */
-	fd = open (SWITCHEROO_SYSFS_PATH, O_WRONLY);
-	if (fd > 0) {
-		force_integrate_card (fd);
-		close (fd);
-	} else {
-		int err = errno;
-
-		if (err != EPERM) {
-			g_warning ("switcheroo-control could not query vga_switcheroo status: %s",
-				   g_strerror (err));
-			return 1;
-		}
-
-		g_debug ("SecureBoot mode, can't force integrated card");
-	}
-
 	data = g_new0 (ControlData, 1);
-	data->available = TRUE;
+
+	get_num_gpus (data);
 	setup_dbus (data);
 	data->init_done = TRUE;
 	if (data->connection)

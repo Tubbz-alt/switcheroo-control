@@ -1,3 +1,15 @@
+2.0
+---
+
+This release adds a number of new properties to list GPUs, figure out
+how to launch OpenGL client on specific GPUs, and figure out which
+one is the default, in a way that supports the stock GPU drivers as well
+as the NVidia proprietary drivers.
+
+The service file itself also makes use of systemd's hardening features.
+
+Note that the API was extended in a backwards compatible way.
+
 1.3.1
 -----
 
