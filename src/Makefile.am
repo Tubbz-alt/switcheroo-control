@@ -12,6 +12,8 @@ libexec_PROGRAMS = switcheroo-control
 
 switcheroo_control_SOURCES =			\
 	switcheroo-control.c			\
+	info-cleanup.c				\
+	info-cleanup.h				\
 	$(BUILT_SOURCES)
 
 switcheroo_control_CPPFLAGS =			\
