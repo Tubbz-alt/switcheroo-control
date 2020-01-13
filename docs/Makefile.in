@@ -311,7 +311,8 @@ SETUP_FILES = \
 
 
 # Version information for marking the documentation
-EXTRA_DIST = switcheroo-control-docs.xml version.xml.in
+EXTRA_DIST = $(HTML_IMAGES) $(SETUP_FILES) switcheroo-control-docs.xml \
+	version.xml.in
 DOC_STAMPS = setup-build.stamp scan-build.stamp sgml-build.stamp \
 	html-build.stamp pdf-build.stamp \
 	sgml.stamp html.stamp pdf.stamp

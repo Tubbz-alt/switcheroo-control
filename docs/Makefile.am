@@ -48,7 +48,7 @@ MAINTAINERCLEANFILES =		\
 	$(NULL)
 
 include $(top_srcdir)/gtk-doc.make
-EXTRA_DIST = switcheroo-control-docs.xml
+EXTRA_DIST += switcheroo-control-docs.xml
 
 CLEANFILES +=					\
 	docs-net.hadess.SwitcherooControl.xml		\

@@ -40,7 +40,7 @@
         variable to set to use the GPU, followed by its value, the "Default" (b) key
         will tag the default (usually integrated) GPU.
     -->
-    <property name="GPUs" type="a(a{sv})" access="read"/>
+    <property name="GPUs" type="aa{sv}" access="read"/>
 
   </interface>
 </node>

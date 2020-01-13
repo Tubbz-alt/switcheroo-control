@@ -106,7 +106,10 @@ send_dbus_event (ControlData *data)
 	GVariantBuilder props_builder;
 	GVariant *props_changed = NULL;
 
-	g_assert (data->connection);
+	if (data->connection == NULL) {
+		g_debug ("Not sending D-Bus event, D-Bus not ready");
+		return;
+	}
 
 	g_variant_builder_init (&props_builder, G_VARIANT_TYPE ("a{sv}"));
 

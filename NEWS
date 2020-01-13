@@ -1,3 +1,10 @@
+2.1
+---
+
+This release fixes the wrong data type being advertised in the introspection
+XML for the GPUs property, which lead to incorrect auto-generated code,
+and also fixes a potential assertion on startup.
+
 2.0
 ---
 
