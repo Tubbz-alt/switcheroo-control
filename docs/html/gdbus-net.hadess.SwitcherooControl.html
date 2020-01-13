@@ -37,7 +37,7 @@
 <pre class="synopsis">
 <a class="link" href="gdbus-net.hadess.SwitcherooControl.html#gdbus-property-net-hadess-SwitcherooControl.HasDualGpu" title='The "HasDualGpu" property'>HasDualGpu</a>  readable   b
 <a class="link" href="gdbus-net.hadess.SwitcherooControl.html#gdbus-property-net-hadess-SwitcherooControl.NumGPUs" title='The "NumGPUs" property'>NumGPUs</a>     readable   u
-<a class="link" href="gdbus-net.hadess.SwitcherooControl.html#gdbus-property-net-hadess-SwitcherooControl.GPUs" title='The "GPUs" property'>GPUs</a>        readable   a(a{sv})
+<a class="link" href="gdbus-net.hadess.SwitcherooControl.html#gdbus-property-net-hadess-SwitcherooControl.GPUs" title='The "GPUs" property'>GPUs</a>        readable   aa{sv}
 </pre>
 </div>
 <div class="refsect1">
@@ -75,7 +75,7 @@ NumGPUs  readable   u
 <div class="refsect2">
 <a name="gdbus-property-net-hadess-SwitcherooControl.GPUs"></a><h3>The "GPUs" property</h3>
 <pre class="programlisting">
-GPUs  readable   a(a{sv})
+GPUs  readable   aa{sv}
 </pre>
 <p>        An array of key-pair values representing each GPU. The key named "Name" (s)
         will contain a user-facing name for the GPU, the "Environment" (as) key will
