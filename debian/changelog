@@ -1,3 +1,9 @@
+switcheroo-control (2.1-1pop1) eoan; urgency=medium
+
+  * Package for Pop!_OS
+
+ -- Tim Crawford <tcrawford@system76.com>  Mon, 20 Jan 2020 11:13:15 -0700
+
 switcheroo-control (2.1-1) unstable; urgency=medium
 
   * New upstream version
